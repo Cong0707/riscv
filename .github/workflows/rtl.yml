@@ -1,0 +1,43 @@
+name: RTL
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verilator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y verilator python3
+
+      - name: Check generated RV64I image helpers
+        run: |
+          python3 -m unittest discover -s tests -p 'test_*.py'
+          python3 tests/gen_rv64i_smoke.py
+          git diff --exit-code -- sim/generated/rv64i_smoke.hex
+
+      - name: Verilator lint
+        run: |
+          mkdir -p build/verilator/obj_dir
+          verilator --lint-only --Wall --Wno-fatal --timing \
+            --top-module tb_rv64_core --Mdir build/verilator/obj_dir \
+            -f rtl/files.f sim/tb_rv64_core.sv
+
+      - name: Build and run RV64I smoke test
+        run: |
+          verilator --binary --timing --Wall --Wno-fatal \
+            --top-module tb_rv64_core --Mdir build/verilator/obj_dir \
+            -f rtl/files.f sim/tb_rv64_core.sv
+          ./build/verilator/obj_dir/Vtb_rv64_core

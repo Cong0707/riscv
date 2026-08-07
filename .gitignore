@@ -1,0 +1,20 @@
+# Reproducible simulator and toolchain output.
+/build/
+
+# Common HDL simulator artefacts if a tool is invoked outside the wrappers.
+**/obj_dir/
+*.vcd
+*.fst
+*.wlf
+*.vvp
+*.out
+*.log
+*.coverage
+*.gcda
+*.gcno
+
+# Python cache produced by image/test helpers.
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
