@@ -11,7 +11,7 @@ if ([string]::IsNullOrWhiteSpace($WorkRoot)) {
   if (-not [string]::IsNullOrWhiteSpace($env:RISCV_WORK_ROOT)) {
     $WorkRoot = $env:RISCV_WORK_ROOT
   } else {
-    $WorkRoot = Join-Path $repoRoot 'build'
+    $WorkRoot = 'D:\Develop\AI\codex-work\riscv'
   }
 }
 
@@ -22,9 +22,11 @@ if ($null -eq $vvp) { throw 'vvp was not found on PATH; install native Windows I
 
 $outputRoot = Join-Path ([IO.Path]::GetFullPath($WorkRoot)) 'iverilog'
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
-$outputFile = Join-Path $outputRoot 'rv64_smoke.vvp'
-$fileList = Join-Path $repoRoot 'rtl/files.f'
-$testbench = Join-Path $repoRoot 'sim/tb_rv64_core.sv'
+$fileList = 'rtl/files.f'
+$tests = @(
+  @{ Top = 'tb_rv64_core';  File = 'sim/tb_rv64_core.sv';  Output = 'rv64i_smoke.vvp' },
+  @{ Top = 'tb_rv64m_core'; File = 'sim/tb_rv64m_core.sv'; Output = 'rv64m_smoke.vvp' }
+)
 
 Push-Location $repoRoot
 try {
@@ -34,14 +36,18 @@ try {
   Write-Host ('VVP: {0}' -f $vvp.Source)
   & $vvp.Source '-V'
   if ($LASTEXITCODE -ne 0) { throw "vvp version query failed with exit code $LASTEXITCODE" }
-  Write-Host ('Output: {0}' -f $outputFile)
-  & $iverilog.Source '-g2012' '-s' 'tb_rv64_core' '-f' $fileList '-o' $outputFile $testbench
-  if ($LASTEXITCODE -ne 0) { throw "iverilog failed with exit code $LASTEXITCODE" }
+  foreach ($test in $tests) {
+    $outputFile = Join-Path $outputRoot $test.Output
+    Write-Host ('Test: {0}' -f $test.Top)
+    Write-Host ('Output: {0}' -f $outputFile)
+    & $iverilog.Source '-g2012' '-s' $test.Top '-f' $fileList '-o' $outputFile $test.File
+    if ($LASTEXITCODE -ne 0) { throw "iverilog failed for $($test.Top) with exit code $LASTEXITCODE" }
 
-  & $vvp.Source $outputFile
-  if ($LASTEXITCODE -ne 0) { throw "vvp failed with exit code $LASTEXITCODE" }
+    & $vvp.Source $outputFile
+    if ($LASTEXITCODE -ne 0) { throw "vvp failed for $($test.Top) with exit code $LASTEXITCODE" }
+  }
 } finally {
   Pop-Location
 }
 
-Write-Host 'Icarus RV64I smoke test completed successfully.'
+Write-Host 'Icarus RV64I/RV64M smoke tests completed successfully.'

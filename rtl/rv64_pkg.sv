@@ -2,8 +2,8 @@
 
 package rv64_pkg;
 
-  // RV64I opcode map. Extensions outside the base integer ISA are decoded
-  // as illegal by rv64_decoder.
+  // Base integer opcode map. Extensions sharing these opcodes are selected
+  // by funct fields in rv64_decoder.
   // These are logic typedefs rather than enum typedefs because Icarus 12 can
   // assert while elaborating package enums used in module ports. The named
   // constants retain the same width and encoding while remaining portable.
@@ -67,6 +67,21 @@ package rv64_pkg;
   localparam mem_size_t MEM_W    = 3'd3;
   localparam mem_size_t MEM_D    = 3'd4;
 
+  typedef logic [3:0] mdu_op_t;
+  localparam mdu_op_t MDU_MUL    = 4'd0;
+  localparam mdu_op_t MDU_MULH   = 4'd1;
+  localparam mdu_op_t MDU_MULHSU = 4'd2;
+  localparam mdu_op_t MDU_MULHU  = 4'd3;
+  localparam mdu_op_t MDU_DIV    = 4'd4;
+  localparam mdu_op_t MDU_DIVU   = 4'd5;
+  localparam mdu_op_t MDU_REM    = 4'd6;
+  localparam mdu_op_t MDU_REMU   = 4'd7;
+  localparam mdu_op_t MDU_MULW   = 4'd8;
+  localparam mdu_op_t MDU_DIVW   = 4'd9;
+  localparam mdu_op_t MDU_DIVUW  = 4'd10;
+  localparam mdu_op_t MDU_REMW   = 4'd11;
+  localparam mdu_op_t MDU_REMUW  = 4'd12;
+
   // Control information emitted by the instruction decoder.
   // alu_src_pc selects the current PC as the ALU A input (AUIPC and PC based
   // target calculations). alu_src_imm selects the decoded immediate as B.
@@ -86,12 +101,14 @@ package rv64_pkg;
     logic       is_jal;
     logic       is_jalr;
     logic       is_fence;
+    logic       is_mdu;
     logic       is_ecall;
     logic       is_ebreak;
     alu_op_t    alu_op;
     imm_type_t  imm_type;
     branch_t    branch;
     mem_size_t  mem_size;
+    mdu_op_t    mdu_op;
   } decode_ctrl_t;
 
 endpackage

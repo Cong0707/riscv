@@ -96,6 +96,7 @@ module rv64_core #(
   logic [63:0] ex_alu_a;
   logic [63:0] ex_alu_b;
   alu_op_t     ex_alu_op;
+  mdu_op_t     ex_mdu_op;
   logic [63:0] ex_alu_result;
   logic        ex_cmp_eq;
   logic        ex_cmp_lt_signed;
@@ -111,6 +112,11 @@ module rv64_core #(
 
   logic        load_use_stall;
   logic        data_wait;
+  logic        mdu_start;
+  logic        mdu_busy;
+  logic        mdu_done;
+  logic        mdu_wait;
+  logic [63:0] mdu_result;
   logic [63:0] load_value;
   logic [7:0]  store_strobe;
 
@@ -148,6 +154,18 @@ module rv64_core #(
     .cmp_eq(ex_cmp_eq),
     .cmp_lt_signed(ex_cmp_lt_signed),
     .cmp_lt_unsigned(ex_cmp_lt_unsigned)
+  );
+
+  rv64_mdu mdu (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .start_i(mdu_start),
+    .op_i(ex_mdu_op),
+    .a_i(ex_rs1_value),
+    .b_i(ex_rs2_value),
+    .busy_o(mdu_busy),
+    .done_o(mdu_done),
+    .result_o(mdu_result)
   );
 
   always_comb begin
@@ -190,6 +208,7 @@ module rv64_core #(
 
   always_comb begin
     ex_alu_op = id_ex_q.ctrl.alu_op;
+    ex_mdu_op = id_ex_q.ctrl.mdu_op;
     ex_alu_a = id_ex_q.ctrl.alu_src_pc ? id_ex_q.pc : ex_rs1_value;
     ex_alu_b = id_ex_q.ctrl.alu_src_imm ? id_ex_q.imm : ex_rs2_value;
 
@@ -214,7 +233,9 @@ module rv64_core #(
       ex_redirect_target = id_ex_q.pc + id_ex_q.imm;
     end
 
-    if (id_ex_q.ctrl.is_jal || id_ex_q.ctrl.is_jalr) begin
+    if (id_ex_q.ctrl.is_mdu) begin
+      ex_wb_value = mdu_result;
+    end else if (id_ex_q.ctrl.is_jal || id_ex_q.ctrl.is_jalr) begin
       ex_wb_value = id_ex_q.pc + 64'd4;
     end else begin
       ex_wb_value = ex_alu_result;
@@ -304,10 +325,14 @@ module rv64_core #(
     data_wait = ex_mem_q.valid &&
                 (ex_mem_q.ctrl.mem_read || ex_mem_q.ctrl.mem_write) &&
                 !d_ready_i;
+
+    mdu_wait = id_ex_q.valid && id_ex_q.ctrl.is_mdu && !mdu_done;
+    mdu_start = rst_ni && id_ex_q.valid && id_ex_q.ctrl.is_mdu &&
+                !mdu_busy && !mdu_done && !data_wait;
   end
 
   always_comb begin
-    i_valid_o = rst_ni && !halted_q && !data_wait && !load_use_stall &&
+    i_valid_o = rst_ni && !halted_q && !data_wait && !mdu_wait && !load_use_stall &&
                 !ex_redirect && !ex_exception;
     i_addr_o  = pc_q;
 
@@ -360,7 +385,11 @@ module rv64_core #(
       ex_mem_q.rd         <= id_ex_q.rd;
       ex_mem_q.ctrl       <= id_ex_q.ctrl;
 
-      if (ex_exception) begin
+      if (mdu_wait) begin
+        // Keep the M instruction and all younger work stable while allowing
+        // older MEM/WB work to retire exactly once.
+        ex_mem_q.valid <= 1'b0;
+      end else if (ex_exception) begin
         halted_q      <= 1'b1;
         trap_valid_q  <= 1'b1;
         trap_cause_q  <= ex_exception_cause;

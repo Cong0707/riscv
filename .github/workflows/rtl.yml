@@ -2,7 +2,7 @@ name: RTL
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -22,11 +22,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y verilator python3
 
-      - name: Check generated RV64I image helpers
+      - name: Check generated RV64I and RV64M image helpers
         run: |
           python3 -m unittest discover -s tests -p 'test_*.py'
           python3 tests/gen_rv64i_smoke.py
-          git diff --exit-code -- sim/generated/rv64i_smoke.hex
+          python3 tests/gen_rv64m_smoke.py
+          git diff --exit-code -- sim/generated/rv64i_smoke.hex sim/generated/rv64m_smoke.hex
 
       - name: Verilator lint
         run: |
@@ -34,10 +35,17 @@ jobs:
           verilator --lint-only --Wall --Wno-fatal --timing \
             --top-module tb_rv64_core --Mdir build/verilator/obj_dir \
             -f rtl/files.f sim/tb_rv64_core.sv
+          verilator --lint-only --Wall --Wno-fatal --timing \
+            --top-module tb_rv64m_core --Mdir build/verilator/rv64m_obj_dir \
+            -f rtl/files.f sim/tb_rv64m_core.sv
 
-      - name: Build and run RV64I smoke test
+      - name: Build and run RV64I and RV64M smoke tests
         run: |
           verilator --binary --timing --Wall --Wno-fatal \
             --top-module tb_rv64_core --Mdir build/verilator/obj_dir \
             -f rtl/files.f sim/tb_rv64_core.sv
           ./build/verilator/obj_dir/Vtb_rv64_core
+          verilator --binary --timing --Wall --Wno-fatal \
+            --top-module tb_rv64m_core --Mdir build/verilator/rv64m_obj_dir \
+            -f rtl/files.f sim/tb_rv64m_core.sv
+          ./build/verilator/rv64m_obj_dir/Vtb_rv64m_core

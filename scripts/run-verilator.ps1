@@ -12,7 +12,7 @@ if ([string]::IsNullOrWhiteSpace($WorkRoot)) {
   if (-not [string]::IsNullOrWhiteSpace($env:RISCV_WORK_ROOT)) {
     $WorkRoot = $env:RISCV_WORK_ROOT
   } else {
-    $WorkRoot = Join-Path $repoRoot 'build'
+    $WorkRoot = 'D:\Develop\AI\codex-work\riscv'
   }
 }
 
@@ -29,10 +29,11 @@ if (($verilator.Name -eq 'verilator_bin.exe') -and [string]::IsNullOrWhiteSpace(
 }
 
 $outputRoot = Join-Path ([IO.Path]::GetFullPath($WorkRoot)) 'verilator'
-$mdir = Join-Path $outputRoot 'obj_dir'
-New-Item -ItemType Directory -Force -Path $mdir | Out-Null
 $fileList = 'rtl/files.f'
-$testbench = 'sim/tb_rv64_core.sv'
+$tests = @(
+  @{ Top = 'tb_rv64_core';  File = 'sim/tb_rv64_core.sv' },
+  @{ Top = 'tb_rv64m_core'; File = 'sim/tb_rv64m_core.sv' }
+)
 
 Push-Location $repoRoot
 try {
@@ -40,23 +41,32 @@ try {
   & $verilator.Source '--version'
   if ($LASTEXITCODE -ne 0) { throw "verilator version query failed with exit code $LASTEXITCODE" }
   if ($LintOnly) {
-    & $verilator.Source '--lint-only' '--Wall' '--Wno-fatal' '--timing' '--top-module' 'tb_rv64_core' '-f' $fileList $testbench
-    if ($LASTEXITCODE -ne 0) { throw "verilator lint failed with exit code $LASTEXITCODE" }
-    Write-Host 'Verilator lint completed successfully.'
+    foreach ($test in $tests) {
+      Write-Host ('Lint: {0}' -f $test.Top)
+      & $verilator.Source '--lint-only' '--Wall' '--Wno-fatal' '--timing' '--top-module' $test.Top '-f' $fileList $test.File
+      if ($LASTEXITCODE -ne 0) { throw "verilator lint failed for $($test.Top) with exit code $LASTEXITCODE" }
+    }
+    Write-Host 'Verilator RV64I/RV64M lint completed successfully.'
     return
   }
 
-  & $verilator.Source '--binary' '--timing' '--Wall' '--Wno-fatal' '--top-module' 'tb_rv64_core' '--Mdir' $mdir '-f' $fileList $testbench
-  if ($LASTEXITCODE -ne 0) { throw "verilator build failed with exit code $LASTEXITCODE" }
+  foreach ($test in $tests) {
+    $mdir = Join-Path $outputRoot ($test.Top + '_obj_dir')
+    New-Item -ItemType Directory -Force -Path $mdir | Out-Null
+    Write-Host ('Build: {0}' -f $test.Top)
+    & $verilator.Source '--binary' '--timing' '--Wall' '--Wno-fatal' '--top-module' $test.Top '--Mdir' $mdir '-f' $fileList $test.File
+    if ($LASTEXITCODE -ne 0) { throw "verilator build failed for $($test.Top) with exit code $LASTEXITCODE" }
 
-  $exe = Get-ChildItem -LiteralPath $mdir -File -Filter 'Vtb_rv64_core*' |
-    Where-Object { $_.Extension -in @('', '.exe') } |
-    Select-Object -First 1
-  if ($null -eq $exe) { throw "Verilator build did not produce Vtb_rv64_core in $mdir" }
-  & $exe.FullName
-  if ($LASTEXITCODE -ne 0) { throw "Verilator simulation failed with exit code $LASTEXITCODE" }
+    $executableName = 'V' + $test.Top
+    $exe = Get-ChildItem -LiteralPath $mdir -File -Filter ($executableName + '*') |
+      Where-Object { $_.Extension -in @('', '.exe') } |
+      Select-Object -First 1
+    if ($null -eq $exe) { throw "Verilator build did not produce $executableName in $mdir" }
+    & $exe.FullName
+    if ($LASTEXITCODE -ne 0) { throw "Verilator simulation failed for $($test.Top) with exit code $LASTEXITCODE" }
+  }
 } finally {
   Pop-Location
 }
 
-Write-Host 'Verilator RV64I smoke test completed successfully.'
+Write-Host 'Verilator RV64I/RV64M smoke tests completed successfully.'

@@ -192,6 +192,14 @@ module rv64_decoder (
           10'b0100000_101: begin ctrl.legal = 1'b1; ctrl.alu_op = rv64_pkg::ALU_SRA;  end
           10'b0000000_110: begin ctrl.legal = 1'b1; ctrl.alu_op = rv64_pkg::ALU_OR;   end
           10'b0000000_111: begin ctrl.legal = 1'b1; ctrl.alu_op = rv64_pkg::ALU_AND;  end
+          10'b0000001_000: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_MUL;    end
+          10'b0000001_001: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_MULH;   end
+          10'b0000001_010: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_MULHSU; end
+          10'b0000001_011: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_MULHU;  end
+          10'b0000001_100: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_DIV;    end
+          10'b0000001_101: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_DIVU;   end
+          10'b0000001_110: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_REM;    end
+          10'b0000001_111: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_REMU;   end
           default: begin end
         endcase
       end
@@ -207,6 +215,11 @@ module rv64_decoder (
           10'b0000000_001: begin ctrl.legal = 1'b1; ctrl.alu_op = rv64_pkg::ALU_SLLW; end
           10'b0000000_101: begin ctrl.legal = 1'b1; ctrl.alu_op = rv64_pkg::ALU_SRLW; end
           10'b0100000_101: begin ctrl.legal = 1'b1; ctrl.alu_op = rv64_pkg::ALU_SRAW; end
+          10'b0000001_000: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_MULW;  end
+          10'b0000001_100: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_DIVW;  end
+          10'b0000001_101: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_DIVUW; end
+          10'b0000001_110: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_REMW;  end
+          10'b0000001_111: begin ctrl.legal = 1'b1; ctrl.is_mdu = 1'b1; ctrl.mdu_op = rv64_pkg::MDU_REMUW; end
           default: begin end
         endcase
       end
@@ -231,7 +244,7 @@ module rv64_decoder (
       end
 
       default: begin
-        // Reserved opcodes and non-RV64I extensions remain illegal.
+        // Reserved opcodes and extensions not yet implemented remain illegal.
       end
     endcase
 
@@ -253,12 +266,14 @@ module rv64_decoder (
       ctrl.is_jal      = 1'b0;
       ctrl.is_jalr     = 1'b0;
       ctrl.is_fence    = 1'b0;
+      ctrl.is_mdu      = 1'b0;
       ctrl.is_ecall    = 1'b0;
       ctrl.is_ebreak   = 1'b0;
       ctrl.alu_op      = rv64_pkg::ALU_NONE;
       ctrl.imm_type    = rv64_pkg::IMM_NONE;
       ctrl.branch      = rv64_pkg::BR_NONE;
       ctrl.mem_size    = rv64_pkg::MEM_NONE;
+      ctrl.mdu_op      = rv64_pkg::MDU_MUL;
     end
   end
 

@@ -1,17 +1,18 @@
 # RV64 处理器工程
 
-这是一个从 `RV64I` 起步、面向 `RV64GC`、特权架构、`Sv39` 和 Linux/Ubuntu 启动的 SystemVerilog 处理器项目。当前第一阶段采用现代改进哈佛结构：核心拥有独立 32 位取指端口和独立 64 位数据端口；更高层计划接入独立 I/D cache、MMU、DRAM 控制器、MMIO fabric 和块设备/DMA。
+这是一个从 `RV64I` 起步、面向 `RV64GC`、特权架构、`Sv39` 和 Linux/Ubuntu 启动的 SystemVerilog 处理器项目。当前已形成可运行的 `RV64IM` 功能基线，并采用现代改进哈佛结构：核心拥有独立 32 位取指端口和独立 64 位数据端口；更高层计划接入独立 I/D cache、MMU、DRAM 控制器、MMIO fabric 和块设备/DMA。
 
 ## 当前交付
 
-- `rtl/rv64_core.sv`：五级 `IF/ID/EX/MEM/WB`、单发射、顺序提交的 RV64I 核心。
+- `rtl/rv64_core.sv`：五级 `IF/ID/EX/MEM/WB`、单发射、顺序提交的 RV64IM 核心。
 - `rtl/rv64_decoder.sv`、`rv64_imm_gen.sv`、`rv64_alu.sv`、`rv64_regfile.sv`：基础整数指令通路。
-- `sim/tb_rv64_core.sv`：独立 I/D 端口的自检测试平台。
-- `tests/gen_rv64i_smoke.py`：不依赖交叉 GCC 的 RV64I 小端镜像生成器。
+- `rtl/rv64_mdu.sv`：覆盖全部 RV64M 64 位与 W 类乘除指令的握手式运算单元。
+- `sim/tb_rv64_core.sv`、`sim/tb_rv64m_core.sv`：独立 I/D 端口的 RV64I/RV64M 自检测试平台。
+- `tests/gen_rv64i_smoke.py`、`tests/gen_rv64m_smoke.py`：不依赖交叉 GCC 的小端镜像生成器。
 - `docs/architecture.zh-CN.md`：架构契约与接口边界。
 - `docs/roadmap.zh-CN.md`：从 RV64I 到 Ubuntu 的阶段验收路线图。
 
-目前尚未实现 `M/A/F/D/C`、`Zicsr/Zifencei`、M/S/U 特权模式、PMP、`Sv39`、cache、设备模型或 Linux 启动，因此不能宣称已经支持 `RV64GC` 或 Ubuntu。
+目前尚未实现 `A/F/D/C`、`Zicsr/Zifencei`、M/S/U 特权模式、PMP、`Sv39`、cache、设备模型或 Linux 启动，因此不能宣称已经支持 `RV64GC` 或 Ubuntu。
 
 ## 原生 Windows 验证
 
@@ -41,8 +42,8 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 
 ## Git 工作流
 
-- `main`：可复现、通过当前验收门的基线。
-- `develop`：下一阶段集成分支。
-- `feature/*`：单一功能工作分支；提交前必须运行 Python 回归和可用的 RTL 仿真。
+- 项目只维护 `main` 分支，所有阶段性工作直接形成小而可验证的中文提交。
+- 每次提交前必须运行受影响的 Python 回归、Verilator lint 和可用的 RTL 仿真。
+- 未通过当前验收门的代码不得提交；实验性草稿只放在仓外临时目录。
 
 详细规则见 `CONTRIBUTING.md`，架构变更必须同步更新 `docs/architecture.zh-CN.md` 和 `docs/roadmap.zh-CN.md`。
