@@ -1,0 +1,9 @@
+`verilator_config
+lint_off -rule WIDTHEXPAND  -file "*third_party/berkeley-hardfloat/source*"
+lint_off -rule WIDTHTRUNC   -file "*third_party/berkeley-hardfloat/source*"
+lint_off -rule TIMESCALEMOD -file "*third_party/berkeley-hardfloat/source*"
+lint_off -rule GENUNNAMED   -file "*third_party/berkeley-hardfloat/source*"
+lint_off -rule DECLFILENAME -file "*third_party/berkeley-hardfloat/source*"
+lint_off -rule UNUSEDPARAM  -file "*third_party/berkeley-hardfloat/source*"
+lint_off -rule UNUSEDSIGNAL -file "*third_party/berkeley-hardfloat/source*"
+lint_off -rule VARHIDDEN    -file "*third_party/berkeley-hardfloat/source*"

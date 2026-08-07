@@ -23,13 +23,15 @@ if ($null -eq $vvp) { throw 'vvp was not found on PATH; install native Windows I
 $outputRoot = Join-Path ([IO.Path]::GetFullPath($WorkRoot)) 'iverilog'
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 $fileList = 'rtl/files.f'
+$hardfloatFileList = 'rtl/hardfloat.f'
 $tests = @(
   @{ Top = 'tb_rv64_core';  File = 'sim/tb_rv64_core.sv';  Output = 'rv64i_smoke.vvp' },
   @{ Top = 'tb_rv64m_core'; File = 'sim/tb_rv64m_core.sv'; Output = 'rv64m_smoke.vvp' },
   @{ Top = 'tb_rv64a_core'; File = 'sim/tb_rv64a_core.sv'; Output = 'rv64a_smoke.vvp' },
   @{ Top = 'tb_rv64c_core'; File = 'sim/tb_rv64c_core.sv'; Output = 'rv64c_smoke.vvp' },
   @{ Top = 'tb_rv64c_illegal'; File = 'sim/tb_rv64c_illegal.sv'; Output = 'rv64c_illegal.vvp' },
-  @{ Top = 'tb_precise_trap'; File = 'sim/tb_precise_trap.sv'; Output = 'precise_trap.vvp' }
+  @{ Top = 'tb_precise_trap'; File = 'sim/tb_precise_trap.sv'; Output = 'precise_trap.vvp' },
+  @{ Top = 'tb_hardfloat_vendor'; File = 'sim/tb_hardfloat_vendor.sv'; Output = 'hardfloat_vendor.vvp'; FileList = $hardfloatFileList }
 )
 
 Push-Location $repoRoot
@@ -41,10 +43,11 @@ try {
   & $vvp.Source '-V'
   if ($LASTEXITCODE -ne 0) { throw "vvp version query failed with exit code $LASTEXITCODE" }
   foreach ($test in $tests) {
+    $activeFileList = if ($test.ContainsKey('FileList')) { $test.FileList } else { $fileList }
     $outputFile = Join-Path $outputRoot $test.Output
     Write-Host ('Test: {0}' -f $test.Top)
     Write-Host ('Output: {0}' -f $outputFile)
-    & $iverilog.Source '-g2012' '-s' $test.Top '-f' $fileList '-o' $outputFile $test.File
+    & $iverilog.Source '-g2012' '-s' $test.Top '-f' $activeFileList '-o' $outputFile $test.File
     if ($LASTEXITCODE -ne 0) { throw "iverilog failed for $($test.Top) with exit code $LASTEXITCODE" }
 
     & $vvp.Source $outputFile
@@ -54,4 +57,4 @@ try {
   Pop-Location
 }
 
-Write-Host 'Icarus RV64I/RV64M/RV64A/RV64C and precise-trap tests completed successfully.'
+Write-Host 'Icarus ISA, precise-trap, and HardFloat vendor tests completed successfully.'

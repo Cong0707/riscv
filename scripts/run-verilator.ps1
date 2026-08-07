@@ -30,13 +30,16 @@ if (($verilator.Name -eq 'verilator_bin.exe') -and [string]::IsNullOrWhiteSpace(
 
 $outputRoot = Join-Path ([IO.Path]::GetFullPath($WorkRoot)) 'verilator'
 $fileList = 'rtl/files.f'
+$hardfloatFileList = 'rtl/hardfloat.f'
+$hardfloatWaiver = 'third_party/berkeley-hardfloat/hardfloat.vlt'
 $tests = @(
   @{ Top = 'tb_rv64_core';  File = 'sim/tb_rv64_core.sv' },
   @{ Top = 'tb_rv64m_core'; File = 'sim/tb_rv64m_core.sv' },
   @{ Top = 'tb_rv64a_core'; File = 'sim/tb_rv64a_core.sv' },
   @{ Top = 'tb_rv64c_core'; File = 'sim/tb_rv64c_core.sv' },
   @{ Top = 'tb_rv64c_illegal'; File = 'sim/tb_rv64c_illegal.sv' },
-  @{ Top = 'tb_precise_trap'; File = 'sim/tb_precise_trap.sv' }
+  @{ Top = 'tb_precise_trap'; File = 'sim/tb_precise_trap.sv' },
+  @{ Top = 'tb_hardfloat_vendor'; File = 'sim/tb_hardfloat_vendor.sv'; FileList = $hardfloatFileList }
 )
 
 Push-Location $repoRoot
@@ -46,11 +49,12 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "verilator version query failed with exit code $LASTEXITCODE" }
   if ($LintOnly) {
     foreach ($test in $tests) {
+      $activeFileList = if ($test.ContainsKey('FileList')) { $test.FileList } else { $fileList }
       Write-Host ('Lint: {0}' -f $test.Top)
-      & $verilator.Source '--lint-only' '--Wall' '--Wno-fatal' '--timing' '--top-module' $test.Top '-f' $fileList $test.File
+      & $verilator.Source '--lint-only' '--Wall' '--Wno-fatal' '--timing' '--top-module' $test.Top $hardfloatWaiver '-f' $activeFileList $test.File
       if ($LASTEXITCODE -ne 0) { throw "verilator lint failed for $($test.Top) with exit code $LASTEXITCODE" }
     }
-    Write-Host 'Verilator RV64I/RV64M/RV64A/RV64C and precise-trap lint completed successfully.'
+    Write-Host 'Verilator ISA, precise-trap, and HardFloat vendor lint completed successfully.'
     return
   }
 
@@ -70,6 +74,7 @@ try {
   }
 
   foreach ($test in $tests) {
+    $activeFileList = if ($test.ContainsKey('FileList')) { $test.FileList } else { $fileList }
     $mdir = [IO.Path]::GetFullPath((Join-Path $outputRoot ($test.Top + '_obj_dir')))
     $outputPrefix = [IO.Path]::GetFullPath($outputRoot).TrimEnd('\', '/') +
                     [IO.Path]::DirectorySeparatorChar
@@ -81,7 +86,7 @@ try {
     }
     New-Item -ItemType Directory -Force -Path $mdir | Out-Null
     Write-Host ('Build: {0}' -f $test.Top)
-    & $verilator.Source '--binary' '--timing' '--Wall' '--Wno-fatal' '--top-module' $test.Top '--Mdir' $mdir '-f' $fileList $test.File
+    & $verilator.Source '--binary' '--timing' '--Wall' '--Wno-fatal' '--top-module' $test.Top '--Mdir' $mdir $hardfloatWaiver '-f' $activeFileList $test.File
     if ($LASTEXITCODE -ne 0) { throw "verilator build failed for $($test.Top) with exit code $LASTEXITCODE" }
 
     $executableName = 'V' + $test.Top
@@ -96,4 +101,4 @@ try {
   Pop-Location
 }
 
-Write-Host 'Verilator RV64I/RV64M/RV64A/RV64C and precise-trap tests completed successfully.'
+Write-Host 'Verilator ISA, precise-trap, and HardFloat vendor tests completed successfully.'

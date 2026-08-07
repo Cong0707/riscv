@@ -52,6 +52,10 @@ jobs:
           verilator --lint-only --Wall --Wno-fatal --timing \
             --top-module tb_precise_trap --Mdir build/verilator/precise_trap_obj_dir \
             -f rtl/files.f sim/tb_precise_trap.sv
+          verilator --lint-only --Wall --Wno-fatal --timing \
+            --top-module tb_hardfloat_vendor --Mdir build/verilator/hardfloat_vendor_obj_dir \
+            third_party/berkeley-hardfloat/hardfloat.vlt \
+            -f rtl/hardfloat.f sim/tb_hardfloat_vendor.sv
 
       - name: Build and run RV64I, RV64M, RV64A and RV64C smoke tests
         run: |
@@ -79,3 +83,8 @@ jobs:
             --top-module tb_precise_trap --Mdir build/verilator/precise_trap_obj_dir \
             -f rtl/files.f sim/tb_precise_trap.sv
           ./build/verilator/precise_trap_obj_dir/Vtb_precise_trap
+          verilator --binary --timing --Wall --Wno-fatal \
+            --top-module tb_hardfloat_vendor --Mdir build/verilator/hardfloat_vendor_obj_dir \
+            third_party/berkeley-hardfloat/hardfloat.vlt \
+            -f rtl/hardfloat.f sim/tb_hardfloat_vendor.sv
+          ./build/verilator/hardfloat_vendor_obj_dir/Vtb_hardfloat_vendor

@@ -9,12 +9,13 @@
 - `rtl/rv64_mdu.sv`：覆盖全部 RV64M 64 位与 W 类乘除指令的握手式运算单元。
 - `rtl/rv64_amo.sv`：覆盖 LR/SC 和全部基础 AMO W/D 形式的单核阻塞式原子单元。
 - `rtl/rv64c_decompressor.sv`：覆盖 RV64C 整数形式、HINT 和保留编码分类的 16 位解压器。
+- `third_party/berkeley-hardfloat`：固定版本的 Berkeley HardFloat Release 1 RISC-V Verilog 源码、许可证和工具兼容补丁；当前已通过独立 F32 加法/F64 除法验证，尚未接入核心 F/D 数据通路。
 - `sim/tb_rv64_core.sv`、`sim/tb_rv64m_core.sv`、`sim/tb_rv64a_core.sv`、`sim/tb_rv64c_core.sv`、`sim/tb_rv64c_illegal.sv`：独立 I/D 端口的分扩展自检测试平台。
 - `tests/gen_rv64i_smoke.py`、`tests/gen_rv64m_smoke.py`、`tests/gen_rv64a_smoke.py`、`tests/gen_rv64c_smoke.py`：不依赖交叉 GCC 的小端镜像生成器。
 - `docs/architecture.zh-CN.md`：架构契约与接口边界。
 - `docs/roadmap.zh-CN.md`：从 RV64I 到 Ubuntu 的阶段验收路线图。
 
-当前 A 扩展只保证单核、阻塞式 D-port 且无外部 DMA/其他总线主设备并发时的功能原子性；系统级原子总线属性仍待后续互连阶段实现。C 扩展当前覆盖 RV64 的整数压缩形式；依赖 F/D 的压缩浮点形式保持非法。目前尚未实现 `F/D`、`Zicsr/Zifencei`、M/S/U 特权模式、PMP、`Sv39`、cache、设备模型或 Linux 启动，因此不能宣称已经支持 `RV64GC` 或 Ubuntu。
+当前 A 扩展只保证单核、阻塞式 D-port 且无外部 DMA/其他总线主设备并发时的功能原子性；系统级原子总线属性仍待后续互连阶段实现。C 扩展当前覆盖 RV64 的整数压缩形式；依赖 F/D 的压缩浮点形式保持非法。HardFloat 已作为第三方算术内核固定并独立验证，但核心尚未实现 FPR、浮点解码、访存、写回、`fflags/frm/fcsr` 或 F/D 指令。目前仍不能宣称已经支持 `RV64GC` 或 Ubuntu。
 
 ## 原生 Windows 验证
 

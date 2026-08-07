@@ -1,0 +1,16 @@
++incdir+third_party/berkeley-hardfloat/source/RISCV
++incdir+third_party/berkeley-hardfloat/source
+third_party/berkeley-hardfloat/source/RISCV/HardFloat_specialize.v
+third_party/berkeley-hardfloat/source/HardFloat_primitives.v
+third_party/berkeley-hardfloat/source/HardFloat_rawFN.v
+third_party/berkeley-hardfloat/source/isSigNaNRecFN.v
+third_party/berkeley-hardfloat/source/fNToRecFN.v
+third_party/berkeley-hardfloat/source/recFNToFN.v
+third_party/berkeley-hardfloat/source/iNToRecFN.v
+third_party/berkeley-hardfloat/source/recFNToIN.v
+third_party/berkeley-hardfloat/source/recFNToRecFN.v
+third_party/berkeley-hardfloat/source/addRecFN.v
+third_party/berkeley-hardfloat/source/mulRecFN.v
+third_party/berkeley-hardfloat/source/mulAddRecFN.v
+third_party/berkeley-hardfloat/source/divSqrtRecFN_small.v
+third_party/berkeley-hardfloat/source/compareRecFN.v

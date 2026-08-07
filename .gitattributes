@@ -1,0 +1,3 @@
+# Preserve upstream HardFloat files byte-for-byte; Release 1 includes a final
+# blank line in its distributed sources.
+third_party/berkeley-hardfloat/** whitespace=-blank-at-eof
