@@ -28,7 +28,8 @@ $tests = @(
   @{ Top = 'tb_rv64m_core'; File = 'sim/tb_rv64m_core.sv'; Output = 'rv64m_smoke.vvp' },
   @{ Top = 'tb_rv64a_core'; File = 'sim/tb_rv64a_core.sv'; Output = 'rv64a_smoke.vvp' },
   @{ Top = 'tb_rv64c_core'; File = 'sim/tb_rv64c_core.sv'; Output = 'rv64c_smoke.vvp' },
-  @{ Top = 'tb_rv64c_illegal'; File = 'sim/tb_rv64c_illegal.sv'; Output = 'rv64c_illegal.vvp' }
+  @{ Top = 'tb_rv64c_illegal'; File = 'sim/tb_rv64c_illegal.sv'; Output = 'rv64c_illegal.vvp' },
+  @{ Top = 'tb_precise_trap'; File = 'sim/tb_precise_trap.sv'; Output = 'precise_trap.vvp' }
 )
 
 Push-Location $repoRoot
@@ -53,4 +54,4 @@ try {
   Pop-Location
 }
 
-Write-Host 'Icarus RV64I/RV64M/RV64A/RV64C smoke tests completed successfully.'
+Write-Host 'Icarus RV64I/RV64M/RV64A/RV64C and precise-trap tests completed successfully.'

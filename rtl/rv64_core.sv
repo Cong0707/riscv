@@ -83,6 +83,9 @@ module rv64_core #(
   mem_wb_t     mem_wb_q;
 
   logic        halted_q;
+  logic        trap_pending_q;
+  logic [63:0] trap_pending_cause_q;
+  logic [63:0] trap_pending_tval_q;
   logic        trap_valid_q;
   logic [63:0] trap_cause_q;
   logic [63:0] trap_tval_q;
@@ -437,7 +440,8 @@ module rv64_core #(
   end
 
   always_comb begin
-    i_valid_o = rst_ni && !halted_q && !data_wait && !mdu_wait && !load_use_stall &&
+    i_valid_o = rst_ni && !halted_q && !trap_pending_q &&
+                !data_wait && !mdu_wait && !load_use_stall &&
                 !ex_redirect && !ex_exception;
     i_addr_o  = fetch_cross_q
               ? ((pc_q & ~64'd3) + 64'd4)
@@ -473,16 +477,32 @@ module rv64_core #(
       id_ex_q      <= '0;
       ex_mem_q     <= '0;
       mem_wb_q     <= '0;
-      halted_q     <= 1'b0;
-      trap_valid_q <= 1'b0;
-      trap_cause_q <= 64'b0;
-      trap_tval_q  <= 64'b0;
+      halted_q       <= 1'b0;
+      trap_pending_q <= 1'b0;
+      trap_pending_cause_q <= 64'b0;
+      trap_pending_tval_q  <= 64'b0;
+      trap_valid_q  <= 1'b0;
+      trap_cause_q  <= 64'b0;
+      trap_tval_q   <= 64'b0;
     end else if (halted_q) begin
       fetch_cross_q <= 1'b0;
       if_id_q.valid  <= 1'b0;
       id_ex_q.valid  <= 1'b0;
       ex_mem_q.valid <= 1'b0;
       mem_wb_q.valid <= 1'b0;
+    end else if (trap_pending_q) begin
+      // The previous cycle moved the last older EX/MEM result into MEM/WB.
+      // Publish the trap on the same edge that result retires in the regfile.
+      halted_q          <= 1'b1;
+      trap_pending_q    <= 1'b0;
+      trap_valid_q      <= 1'b1;
+      trap_cause_q      <= trap_pending_cause_q;
+      trap_tval_q       <= trap_pending_tval_q;
+      fetch_cross_q     <= 1'b0;
+      if_id_q.valid     <= 1'b0;
+      id_ex_q.valid     <= 1'b0;
+      ex_mem_q.valid    <= 1'b0;
+      mem_wb_q.valid    <= 1'b0;
     end else if (data_wait) begin
       // The MEM operation is the oldest uncompleted instruction. Younger
       // stages and the fetch PC remain stable until the data port completes.
@@ -511,14 +531,13 @@ module rv64_core #(
         // older MEM/WB work to retire exactly once.
         ex_mem_q.valid <= 1'b0;
       end else if (ex_exception) begin
-        halted_q      <= 1'b1;
-        fetch_cross_q <= 1'b0;
-        trap_valid_q  <= 1'b1;
-        trap_cause_q  <= ex_exception_cause;
-        trap_tval_q   <= ex_exception_tval;
-        if_id_q.valid <= 1'b0;
-        id_ex_q.valid <= 1'b0;
-        ex_mem_q.valid <= 1'b0;
+        trap_pending_q       <= 1'b1;
+        trap_pending_cause_q <= ex_exception_cause;
+        trap_pending_tval_q  <= ex_exception_tval;
+        fetch_cross_q        <= 1'b0;
+        if_id_q.valid        <= 1'b0;
+        id_ex_q.valid        <= 1'b0;
+        ex_mem_q.valid       <= 1'b0;
       end else if (ex_redirect) begin
         pc_q           <= ex_redirect_target;
         fetch_cross_q  <= 1'b0;

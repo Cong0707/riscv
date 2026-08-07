@@ -49,6 +49,9 @@ jobs:
           verilator --lint-only --Wall --Wno-fatal --timing \
             --top-module tb_rv64c_illegal --Mdir build/verilator/rv64c_illegal_obj_dir \
             -f rtl/files.f sim/tb_rv64c_illegal.sv
+          verilator --lint-only --Wall --Wno-fatal --timing \
+            --top-module tb_precise_trap --Mdir build/verilator/precise_trap_obj_dir \
+            -f rtl/files.f sim/tb_precise_trap.sv
 
       - name: Build and run RV64I, RV64M, RV64A and RV64C smoke tests
         run: |
@@ -72,3 +75,7 @@ jobs:
             --top-module tb_rv64c_illegal --Mdir build/verilator/rv64c_illegal_obj_dir \
             -f rtl/files.f sim/tb_rv64c_illegal.sv
           ./build/verilator/rv64c_illegal_obj_dir/Vtb_rv64c_illegal
+          verilator --binary --timing --Wall --Wno-fatal \
+            --top-module tb_precise_trap --Mdir build/verilator/precise_trap_obj_dir \
+            -f rtl/files.f sim/tb_precise_trap.sv
+          ./build/verilator/precise_trap_obj_dir/Vtb_precise_trap
