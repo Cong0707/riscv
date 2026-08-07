@@ -11,6 +11,9 @@
 * 增加自检 RV64I 镜像、SystemVerilog 测试平台、原生 Windows Icarus/Verilator 脚本和 GitHub Verilator CI。
 * 增加完整 RV64M 解码、握手式乘除单元、EX 停顿和结果前递，覆盖 8 条 64 位指令与 5 条 W 类指令。
 * 增加 RV64M 独立镜像、边界参考模型和核心级自检，覆盖除零、最小负数除以 `-1`、连续 M 指令依赖及 W 类符号扩展。
+* 增加 RV64A 单核功能基线，覆盖 `LR.W/D`、`SC.W/D` 和 `AMOSWAP/ADD/XOR/AND/OR/MIN/MAX/MINU/MAXU.W/D`。
+* 增加阻塞式 D-port 原子读改写、W 形式旧值符号扩展、本地 reservation、普通 store 清 reservation，以及 SC 失败不写内存的语义。
+* 在当前顺序单发射、单 outstanding 模型下以强顺序满足 `aq/rl`；外部原子事务属性留待互连阶段实现。
 * 将 Git 工作流简化为只维护 `main`，提交信息统一使用中文。
 * 增加 RV64 五级顺序流水线、改进哈佛核心接口（独立 32 位 I-port 与 64 位 D-port）、冒险/前递/精确异常边界的目标架构文档。
 * 明确 I/D cache 与通道在核心侧分离、下层统一 DRAM 控制器只汇聚到 DRAM，RAM 与 MMIO/块设备/DMA 的层次边界。
@@ -20,5 +23,7 @@
 
 ### Status
 
-* 当前已形成 RV64IM 可执行基线：Python 参考测试、Verilator lint/仿真和 Icarus 冒烟均通过。
-* 当前基线仍不包含 `A/F/D/C`、特权架构、`Sv39`、cache、平台设备或 Linux/Ubuntu 启动；这些功能按路线图分阶段推进。
+* 当前已形成 `RV64IMA` 功能基线；A 扩展当前限定于单核阻塞式 D-port，不表示阶段 2 的全部系统验收已经关闭。
+* 阶段 2 尚缺外部总线原子锁定/独占属性、随机并发、访问错误和编译器自旋锁验收。
+* 多核 cache 一致性和 DMA reservation 监听属于后续互连阶段，当前同样未提供。
+* 当前基线仍不包含 `F/D/C`、特权架构、`Sv39`、cache、平台设备或 Linux/Ubuntu 启动；这些功能按路线图分阶段推进。

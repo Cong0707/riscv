@@ -59,6 +59,7 @@ module rv64_core #(
     logic [63:0]  wb_value;
     logic [63:0]  address;
     logic [63:0]  store_data;
+    logic [7:0]   write_strobe;
     logic [4:0]   rd;
     decode_ctrl_t ctrl;
   } ex_mem_t;
@@ -97,6 +98,7 @@ module rv64_core #(
   logic [63:0] ex_alu_b;
   alu_op_t     ex_alu_op;
   mdu_op_t     ex_mdu_op;
+  amo_op_t     ex_amo_op;
   logic [63:0] ex_alu_result;
   logic        ex_cmp_eq;
   logic        ex_cmp_lt_signed;
@@ -117,8 +119,31 @@ module rv64_core #(
   logic        mdu_done;
   logic        mdu_wait;
   logic [63:0] mdu_result;
+  logic        amo_start;
+  logic        amo_busy;
+  logic        amo_done;
+  logic [63:0] amo_result;
+  logic        amo_mem_valid;
+  logic        amo_mem_write;
+  logic [63:0] amo_mem_addr;
+  logic [63:0] amo_mem_wdata;
+  logic [7:0]  amo_mem_wstrb;
+  logic        reservation_clear;
   logic [63:0] load_value;
-  logic [7:0]  store_strobe;
+
+  function automatic logic [7:0] write_strobe_for_size(
+    input logic [2:0] size
+  );
+    begin
+      case (size)
+        rv64_pkg::MEM_B: write_strobe_for_size = 8'b0000_0001;
+        rv64_pkg::MEM_H: write_strobe_for_size = 8'b0000_0011;
+        rv64_pkg::MEM_W: write_strobe_for_size = 8'b0000_1111;
+        rv64_pkg::MEM_D: write_strobe_for_size = 8'b1111_1111;
+        default: write_strobe_for_size = 8'b0000_0000;
+      endcase
+    end
+  endfunction
 
   rv64_decoder decoder (
     .instr(if_id_q.instr),
@@ -168,6 +193,30 @@ module rv64_core #(
     .result_o(mdu_result)
   );
 
+  rv64_amo amo (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .start_i(amo_start),
+    .op_i(ex_amo_op),
+    .word_i(ex_mem_q.ctrl.mem_size == rv64_pkg::MEM_W),
+    .addr_i(ex_mem_q.address),
+    .operand_i(ex_mem_q.store_data),
+    .reservation_clear_i(reservation_clear),
+    .busy_o(amo_busy),
+    .done_o(amo_done),
+    .result_o(amo_result),
+    .mem_valid_o(amo_mem_valid),
+    .mem_write_o(amo_mem_write),
+    .mem_addr_o(amo_mem_addr),
+    .mem_wdata_o(amo_mem_wdata),
+    .mem_wstrb_o(amo_mem_wstrb),
+    .mem_ready_i(d_ready_i),
+    .mem_rdata_i(d_rdata_i)
+  );
+
+  assign reservation_clear = rst_ni && !ex_mem_q.ctrl.is_amo &&
+                             d_valid_o && d_write_o && d_ready_i;
+
   always_comb begin
     id_rs1_value = rf_rs1_value;
     id_rs2_value = rf_rs2_value;
@@ -196,6 +245,7 @@ module rv64_core #(
     end
 
     if (ex_mem_q.valid && ex_mem_q.ctrl.reg_write && !ex_mem_q.ctrl.mem_read &&
+        !ex_mem_q.ctrl.is_amo &&
         (ex_mem_q.rd != 5'd0)) begin
       if (id_ex_q.ctrl.uses_rs1 && (id_ex_q.rs1 == ex_mem_q.rd)) begin
         ex_rs1_value = ex_mem_q.wb_value;
@@ -204,11 +254,22 @@ module rv64_core #(
         ex_rs2_value = ex_mem_q.wb_value;
       end
     end
+
+    if (ex_mem_q.valid && ex_mem_q.ctrl.is_amo && amo_done &&
+        (ex_mem_q.rd != 5'd0)) begin
+      if (id_ex_q.ctrl.uses_rs1 && (id_ex_q.rs1 == ex_mem_q.rd)) begin
+        ex_rs1_value = amo_result;
+      end
+      if (id_ex_q.ctrl.uses_rs2 && (id_ex_q.rs2 == ex_mem_q.rd)) begin
+        ex_rs2_value = amo_result;
+      end
+    end
   end
 
   always_comb begin
     ex_alu_op = id_ex_q.ctrl.alu_op;
     ex_mdu_op = id_ex_q.ctrl.mdu_op;
+    ex_amo_op = ex_mem_q.ctrl.amo_op;
     ex_alu_a = id_ex_q.ctrl.alu_src_pc ? id_ex_q.pc : ex_rs1_value;
     ex_alu_b = id_ex_q.ctrl.alu_src_imm ? id_ex_q.imm : ex_rs2_value;
 
@@ -245,9 +306,9 @@ module rv64_core #(
   always_comb begin
     ex_address_misaligned = 1'b0;
     case (id_ex_q.ctrl.mem_size)
-      MEM_H: ex_address_misaligned = ex_alu_result[0];
-      MEM_W: ex_address_misaligned = |ex_alu_result[1:0];
-      MEM_D: ex_address_misaligned = |ex_alu_result[2:0];
+      rv64_pkg::MEM_H: ex_address_misaligned = ex_alu_result[0];
+      rv64_pkg::MEM_W: ex_address_misaligned = |ex_alu_result[1:0];
+      rv64_pkg::MEM_D: ex_address_misaligned = |ex_alu_result[2:0];
       default: begin end
     endcase
 
@@ -280,6 +341,12 @@ module rv64_core #(
         ex_exception       = 1'b1;
         ex_exception_cause = CAUSE_STORE_ADDR_MISALIGNED;
         ex_exception_tval  = ex_alu_result;
+      end else if (id_ex_q.ctrl.is_amo && ex_address_misaligned) begin
+        ex_exception       = 1'b1;
+        ex_exception_cause = (id_ex_q.ctrl.amo_op == AMO_LR)
+                           ? CAUSE_LOAD_ADDR_MISALIGNED
+                           : CAUSE_STORE_ADDR_MISALIGNED;
+        ex_exception_tval  = ex_alu_result;
       end
     end
   end
@@ -287,32 +354,22 @@ module rv64_core #(
   always_comb begin
     load_value = d_rdata_i;
     case (ex_mem_q.ctrl.mem_size)
-      MEM_B: begin
+      rv64_pkg::MEM_B: begin
         load_value = ex_mem_q.ctrl.mem_unsigned
                    ? {56'b0, d_rdata_i[7:0]}
                    : {{56{d_rdata_i[7]}}, d_rdata_i[7:0]};
       end
-      MEM_H: begin
+      rv64_pkg::MEM_H: begin
         load_value = ex_mem_q.ctrl.mem_unsigned
                    ? {48'b0, d_rdata_i[15:0]}
                    : {{48{d_rdata_i[15]}}, d_rdata_i[15:0]};
       end
-      MEM_W: begin
+      rv64_pkg::MEM_W: begin
         load_value = ex_mem_q.ctrl.mem_unsigned
                    ? {32'b0, d_rdata_i[31:0]}
                    : {{32{d_rdata_i[31]}}, d_rdata_i[31:0]};
       end
       default: begin end
-    endcase
-  end
-
-  always_comb begin
-    case (ex_mem_q.ctrl.mem_size)
-      MEM_B: store_strobe = 8'b0000_0001;
-      MEM_H: store_strobe = 8'b0000_0011;
-      MEM_W: store_strobe = 8'b0000_1111;
-      MEM_D: store_strobe = 8'b1111_1111;
-      default: store_strobe = 8'b0000_0000;
     endcase
   end
 
@@ -325,10 +382,14 @@ module rv64_core #(
     data_wait = ex_mem_q.valid &&
                 (ex_mem_q.ctrl.mem_read || ex_mem_q.ctrl.mem_write) &&
                 !d_ready_i;
+    if (ex_mem_q.valid && ex_mem_q.ctrl.is_amo)
+      data_wait = !amo_done;
 
     mdu_wait = id_ex_q.valid && id_ex_q.ctrl.is_mdu && !mdu_done;
     mdu_start = rst_ni && id_ex_q.valid && id_ex_q.ctrl.is_mdu &&
                 !mdu_busy && !mdu_done && !data_wait;
+    amo_start = rst_ni && !halted_q && ex_mem_q.valid &&
+                ex_mem_q.ctrl.is_amo && !amo_busy && !amo_done;
   end
 
   always_comb begin
@@ -341,7 +402,14 @@ module rv64_core #(
     d_write_o = ex_mem_q.ctrl.mem_write;
     d_addr_o  = ex_mem_q.address;
     d_wdata_o = ex_mem_q.store_data;
-    d_wstrb_o = ex_mem_q.ctrl.mem_write ? store_strobe : 8'b0;
+    d_wstrb_o = ex_mem_q.ctrl.mem_write ? ex_mem_q.write_strobe : 8'b0;
+    if (ex_mem_q.ctrl.is_amo) begin
+      d_valid_o = rst_ni && !halted_q && amo_mem_valid;
+      d_write_o = amo_mem_write;
+      d_addr_o  = amo_mem_addr;
+      d_wdata_o = amo_mem_wdata;
+      d_wstrb_o = amo_mem_wstrb;
+    end
 
     debug_pc_o   = pc_q;
     halted_o     = halted_q;
@@ -374,14 +442,18 @@ module rv64_core #(
       mem_wb_q.valid     <= ex_mem_q.valid;
       mem_wb_q.rd        <= ex_mem_q.rd;
       mem_wb_q.reg_write <= ex_mem_q.ctrl.reg_write;
-      mem_wb_q.wb_value  <= ex_mem_q.ctrl.mem_read
-                          ? load_value
-                          : ex_mem_q.wb_value;
+      if (ex_mem_q.ctrl.is_amo)
+        mem_wb_q.wb_value <= amo_result;
+      else if (ex_mem_q.ctrl.mem_read)
+        mem_wb_q.wb_value <= load_value;
+      else
+        mem_wb_q.wb_value <= ex_mem_q.wb_value;
 
       ex_mem_q.valid      <= id_ex_q.valid && !ex_exception;
       ex_mem_q.wb_value   <= ex_wb_value;
       ex_mem_q.address    <= ex_alu_result;
       ex_mem_q.store_data <= ex_rs2_value;
+      ex_mem_q.write_strobe <= write_strobe_for_size(id_ex_q.ctrl.mem_size);
       ex_mem_q.rd         <= id_ex_q.rd;
       ex_mem_q.ctrl       <= id_ex_q.ctrl;
 

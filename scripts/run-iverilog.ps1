@@ -25,7 +25,8 @@ New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 $fileList = 'rtl/files.f'
 $tests = @(
   @{ Top = 'tb_rv64_core';  File = 'sim/tb_rv64_core.sv';  Output = 'rv64i_smoke.vvp' },
-  @{ Top = 'tb_rv64m_core'; File = 'sim/tb_rv64m_core.sv'; Output = 'rv64m_smoke.vvp' }
+  @{ Top = 'tb_rv64m_core'; File = 'sim/tb_rv64m_core.sv'; Output = 'rv64m_smoke.vvp' },
+  @{ Top = 'tb_rv64a_core'; File = 'sim/tb_rv64a_core.sv'; Output = 'rv64a_smoke.vvp' }
 )
 
 Push-Location $repoRoot
@@ -50,4 +51,4 @@ try {
   Pop-Location
 }
 
-Write-Host 'Icarus RV64I/RV64M smoke tests completed successfully.'
+Write-Host 'Icarus RV64I/RV64M/RV64A smoke tests completed successfully.'

@@ -14,6 +14,7 @@ package rv64_pkg;
   localparam opcode_t OPCODE_AUIPC     = 7'b0010111;
   localparam opcode_t OPCODE_OP_IMM_32 = 7'b0011011;
   localparam opcode_t OPCODE_STORE     = 7'b0100011;
+  localparam opcode_t OPCODE_AMO       = 7'b0101111;
   localparam opcode_t OPCODE_OP        = 7'b0110011;
   localparam opcode_t OPCODE_LUI       = 7'b0110111;
   localparam opcode_t OPCODE_OP_32     = 7'b0111011;
@@ -82,6 +83,19 @@ package rv64_pkg;
   localparam mdu_op_t MDU_REMW   = 4'd11;
   localparam mdu_op_t MDU_REMUW  = 4'd12;
 
+  typedef logic [3:0] amo_op_t;
+  localparam amo_op_t AMO_LR   = 4'd0;
+  localparam amo_op_t AMO_SC   = 4'd1;
+  localparam amo_op_t AMO_SWAP = 4'd2;
+  localparam amo_op_t AMO_ADD  = 4'd3;
+  localparam amo_op_t AMO_XOR  = 4'd4;
+  localparam amo_op_t AMO_AND  = 4'd5;
+  localparam amo_op_t AMO_OR   = 4'd6;
+  localparam amo_op_t AMO_MIN  = 4'd7;
+  localparam amo_op_t AMO_MAX  = 4'd8;
+  localparam amo_op_t AMO_MINU = 4'd9;
+  localparam amo_op_t AMO_MAXU = 4'd10;
+
   // Control information emitted by the instruction decoder.
   // alu_src_pc selects the current PC as the ALU A input (AUIPC and PC based
   // target calculations). alu_src_imm selects the decoded immediate as B.
@@ -102,6 +116,7 @@ package rv64_pkg;
     logic       is_jalr;
     logic       is_fence;
     logic       is_mdu;
+    logic       is_amo;
     logic       is_ecall;
     logic       is_ebreak;
     alu_op_t    alu_op;
@@ -109,6 +124,7 @@ package rv64_pkg;
     branch_t    branch;
     mem_size_t  mem_size;
     mdu_op_t    mdu_op;
+    amo_op_t    amo_op;
   } decode_ctrl_t;
 
 endpackage

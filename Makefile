@@ -11,6 +11,9 @@ endif
 test: image verilator
 
 image:
+	$(PYTHON) tests/gen_rv64i_smoke.py
+	$(PYTHON) tests/gen_rv64m_smoke.py
+	$(PYTHON) tests/gen_rv64a_smoke.py
 	$(PYTHON) -m unittest discover -s tests -p "test_*.py"
 
 lint:

@@ -224,6 +224,41 @@ module rv64_decoder (
         endcase
       end
 
+      rv64_pkg::OPCODE_AMO: begin
+        ctrl.uses_rs1  = 1'b1;
+        ctrl.uses_rd   = 1'b1;
+        ctrl.reg_write = 1'b1;
+        ctrl.alu_op    = rv64_pkg::ALU_COPY_A;
+        case (instr[14:12])
+          3'b010: ctrl.mem_size = rv64_pkg::MEM_W;
+          3'b011: ctrl.mem_size = rv64_pkg::MEM_D;
+          default: ctrl.mem_size = rv64_pkg::MEM_NONE;
+        endcase
+
+        if (ctrl.mem_size != rv64_pkg::MEM_NONE) begin
+          case (instr[31:27])
+            5'b00010: begin
+              if (instr[24:20] == 5'd0) begin
+                ctrl.legal  = 1'b1;
+                ctrl.is_amo = 1'b1;
+                ctrl.amo_op = rv64_pkg::AMO_LR;
+              end
+            end
+            5'b00011: begin ctrl.legal = 1'b1; ctrl.is_amo = 1'b1; ctrl.uses_rs2 = 1'b1; ctrl.amo_op = rv64_pkg::AMO_SC;   end
+            5'b00001: begin ctrl.legal = 1'b1; ctrl.is_amo = 1'b1; ctrl.uses_rs2 = 1'b1; ctrl.amo_op = rv64_pkg::AMO_SWAP; end
+            5'b00000: begin ctrl.legal = 1'b1; ctrl.is_amo = 1'b1; ctrl.uses_rs2 = 1'b1; ctrl.amo_op = rv64_pkg::AMO_ADD;  end
+            5'b00100: begin ctrl.legal = 1'b1; ctrl.is_amo = 1'b1; ctrl.uses_rs2 = 1'b1; ctrl.amo_op = rv64_pkg::AMO_XOR;  end
+            5'b01100: begin ctrl.legal = 1'b1; ctrl.is_amo = 1'b1; ctrl.uses_rs2 = 1'b1; ctrl.amo_op = rv64_pkg::AMO_AND;  end
+            5'b01000: begin ctrl.legal = 1'b1; ctrl.is_amo = 1'b1; ctrl.uses_rs2 = 1'b1; ctrl.amo_op = rv64_pkg::AMO_OR;   end
+            5'b10000: begin ctrl.legal = 1'b1; ctrl.is_amo = 1'b1; ctrl.uses_rs2 = 1'b1; ctrl.amo_op = rv64_pkg::AMO_MIN;  end
+            5'b10100: begin ctrl.legal = 1'b1; ctrl.is_amo = 1'b1; ctrl.uses_rs2 = 1'b1; ctrl.amo_op = rv64_pkg::AMO_MAX;  end
+            5'b11000: begin ctrl.legal = 1'b1; ctrl.is_amo = 1'b1; ctrl.uses_rs2 = 1'b1; ctrl.amo_op = rv64_pkg::AMO_MINU; end
+            5'b11100: begin ctrl.legal = 1'b1; ctrl.is_amo = 1'b1; ctrl.uses_rs2 = 1'b1; ctrl.amo_op = rv64_pkg::AMO_MAXU; end
+            default: begin end
+          endcase
+        end
+      end
+
       rv64_pkg::OPCODE_MISC_MEM: begin
         // FENCE is architecturally ordered; this core's in-order memory
         // system can implement it as a no-op. FENCE.I is outside RV64I.
@@ -267,6 +302,7 @@ module rv64_decoder (
       ctrl.is_jalr     = 1'b0;
       ctrl.is_fence    = 1'b0;
       ctrl.is_mdu      = 1'b0;
+      ctrl.is_amo      = 1'b0;
       ctrl.is_ecall    = 1'b0;
       ctrl.is_ebreak   = 1'b0;
       ctrl.alu_op      = rv64_pkg::ALU_NONE;
@@ -274,6 +310,7 @@ module rv64_decoder (
       ctrl.branch      = rv64_pkg::BR_NONE;
       ctrl.mem_size    = rv64_pkg::MEM_NONE;
       ctrl.mdu_op      = rv64_pkg::MDU_MUL;
+      ctrl.amo_op      = rv64_pkg::AMO_LR;
     end
   end
 
