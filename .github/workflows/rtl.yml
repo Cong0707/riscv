@@ -22,13 +22,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y verilator python3
 
-      - name: Check generated RV64I, RV64M and RV64A image helpers
+      - name: Check generated RV64I, RV64M, RV64A and RV64C image helpers
         run: |
           python3 -m unittest discover -s tests -p 'test_*.py'
           python3 tests/gen_rv64i_smoke.py
           python3 tests/gen_rv64m_smoke.py
           python3 tests/gen_rv64a_smoke.py
-          git diff --exit-code -- sim/generated/rv64i_smoke.hex sim/generated/rv64m_smoke.hex sim/generated/rv64a_smoke.hex
+          python3 tests/gen_rv64c_smoke.py
+          git diff --exit-code -- sim/generated/rv64i_smoke.hex sim/generated/rv64m_smoke.hex sim/generated/rv64a_smoke.hex sim/generated/rv64c_smoke.hex
 
       - name: Verilator lint
         run: |
@@ -42,8 +43,14 @@ jobs:
           verilator --lint-only --Wall --Wno-fatal --timing \
             --top-module tb_rv64a_core --Mdir build/verilator/rv64a_obj_dir \
             -f rtl/files.f sim/tb_rv64a_core.sv
+          verilator --lint-only --Wall --Wno-fatal --timing \
+            --top-module tb_rv64c_core --Mdir build/verilator/rv64c_obj_dir \
+            -f rtl/files.f sim/tb_rv64c_core.sv
+          verilator --lint-only --Wall --Wno-fatal --timing \
+            --top-module tb_rv64c_illegal --Mdir build/verilator/rv64c_illegal_obj_dir \
+            -f rtl/files.f sim/tb_rv64c_illegal.sv
 
-      - name: Build and run RV64I, RV64M and RV64A smoke tests
+      - name: Build and run RV64I, RV64M, RV64A and RV64C smoke tests
         run: |
           verilator --binary --timing --Wall --Wno-fatal \
             --top-module tb_rv64_core --Mdir build/verilator/obj_dir \
@@ -57,3 +64,11 @@ jobs:
             --top-module tb_rv64a_core --Mdir build/verilator/rv64a_obj_dir \
             -f rtl/files.f sim/tb_rv64a_core.sv
           ./build/verilator/rv64a_obj_dir/Vtb_rv64a_core
+          verilator --binary --timing --Wall --Wno-fatal \
+            --top-module tb_rv64c_core --Mdir build/verilator/rv64c_obj_dir \
+            -f rtl/files.f sim/tb_rv64c_core.sv
+          ./build/verilator/rv64c_obj_dir/Vtb_rv64c_core
+          verilator --binary --timing --Wall --Wno-fatal \
+            --top-module tb_rv64c_illegal --Mdir build/verilator/rv64c_illegal_obj_dir \
+            -f rtl/files.f sim/tb_rv64c_illegal.sv
+          ./build/verilator/rv64c_illegal_obj_dir/Vtb_rv64c_illegal

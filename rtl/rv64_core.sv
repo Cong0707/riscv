@@ -39,12 +39,15 @@ module rv64_core #(
     logic        valid;
     logic [63:0] pc;
     logic [31:0] instr;
+    logic [31:0] original_instr;
+    logic [2:0]  instr_len;
   } if_id_t;
 
   typedef struct packed {
     logic         valid;
     logic [63:0]  pc;
-    logic [31:0]  instr;
+    logic [31:0]  original_instr;
+    logic [2:0]   instr_len;
     logic [63:0]  imm;
     logic [63:0]  rs1_value;
     logic [63:0]  rs2_value;
@@ -72,6 +75,8 @@ module rv64_core #(
   } mem_wb_t;
 
   logic [63:0] pc_q;
+  logic        fetch_cross_q;
+  logic [15:0] fetch_low_half_q;
   if_id_t      if_id_q;
   id_ex_t      id_ex_q;
   ex_mem_t     ex_mem_q;
@@ -91,6 +96,15 @@ module rv64_core #(
   logic [63:0]  rf_rs2_value;
   logic [63:0]  id_rs1_value;
   logic [63:0]  id_rs2_value;
+
+  logic [15:0] fetch_halfword;
+  logic [31:0] decompressed_instr;
+  logic        compressed_legal;
+  logic        fetch_compressed;
+  logic        fetch_complete;
+  logic [31:0] fetch_instr;
+  logic [31:0] fetch_original_instr;
+  logic [2:0]  fetch_instr_len;
 
   logic [63:0] ex_rs1_value;
   logic [63:0] ex_rs2_value;
@@ -181,6 +195,12 @@ module rv64_core #(
     .cmp_lt_unsigned(ex_cmp_lt_unsigned)
   );
 
+  rv64c_decompressor decompressor (
+    .instr_i(fetch_halfword),
+    .instr_o(decompressed_instr),
+    .legal_o(compressed_legal)
+  );
+
   rv64_mdu mdu (
     .clk_i(clk_i),
     .rst_ni(rst_ni),
@@ -216,6 +236,30 @@ module rv64_core #(
 
   assign reservation_clear = rst_ni && !ex_mem_q.ctrl.is_amo &&
                              d_valid_o && d_write_o && d_ready_i;
+  assign fetch_halfword = pc_q[1] ? i_rdata_i[31:16] : i_rdata_i[15:0];
+
+  always_comb begin
+    fetch_compressed = (fetch_halfword[1:0] != 2'b11);
+    fetch_complete = 1'b0;
+    fetch_instr = 32'b0;
+    fetch_original_instr = 32'b0;
+    fetch_instr_len = 3'd4;
+
+    if (fetch_cross_q) begin
+      fetch_complete = 1'b1;
+      fetch_instr = {i_rdata_i[15:0], fetch_low_half_q};
+      fetch_original_instr = fetch_instr;
+    end else if (fetch_compressed) begin
+      fetch_complete = 1'b1;
+      fetch_instr = compressed_legal ? decompressed_instr : 32'b0;
+      fetch_original_instr = {16'b0, fetch_halfword};
+      fetch_instr_len = 3'd2;
+    end else if (!pc_q[1]) begin
+      fetch_complete = 1'b1;
+      fetch_instr = i_rdata_i;
+      fetch_original_instr = i_rdata_i;
+    end
+  end
 
   always_comb begin
     id_rs1_value = rf_rs1_value;
@@ -297,7 +341,7 @@ module rv64_core #(
     if (id_ex_q.ctrl.is_mdu) begin
       ex_wb_value = mdu_result;
     end else if (id_ex_q.ctrl.is_jal || id_ex_q.ctrl.is_jalr) begin
-      ex_wb_value = id_ex_q.pc + 64'd4;
+      ex_wb_value = id_ex_q.pc + {61'b0, id_ex_q.instr_len};
     end else begin
       ex_wb_value = ex_alu_result;
     end
@@ -320,7 +364,7 @@ module rv64_core #(
       if (id_ex_q.ctrl.illegal) begin
         ex_exception       = 1'b1;
         ex_exception_cause = CAUSE_ILLEGAL_INSTRUCTION;
-        ex_exception_tval  = {32'b0, id_ex_q.instr};
+        ex_exception_tval  = {32'b0, id_ex_q.original_instr};
       end else if (id_ex_q.ctrl.is_ebreak) begin
         ex_exception       = 1'b1;
         ex_exception_cause = CAUSE_BREAKPOINT;
@@ -329,7 +373,7 @@ module rv64_core #(
         ex_exception       = 1'b1;
         ex_exception_cause = CAUSE_ECALL_MMODE;
         ex_exception_tval  = 64'b0;
-      end else if (ex_redirect && (ex_redirect_target[1:0] != 2'b00)) begin
+      end else if (ex_redirect && ex_redirect_target[0]) begin
         ex_exception       = 1'b1;
         ex_exception_cause = CAUSE_INSTR_ADDR_MISALIGNED;
         ex_exception_tval  = ex_redirect_target;
@@ -395,7 +439,9 @@ module rv64_core #(
   always_comb begin
     i_valid_o = rst_ni && !halted_q && !data_wait && !mdu_wait && !load_use_stall &&
                 !ex_redirect && !ex_exception;
-    i_addr_o  = pc_q;
+    i_addr_o  = fetch_cross_q
+              ? ((pc_q & ~64'd3) + 64'd4)
+              : (pc_q & ~64'd3);
 
     d_valid_o = rst_ni && !halted_q && ex_mem_q.valid &&
                 (ex_mem_q.ctrl.mem_read || ex_mem_q.ctrl.mem_write);
@@ -421,6 +467,8 @@ module rv64_core #(
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       pc_q         <= RESET_PC;
+      fetch_cross_q <= 1'b0;
+      fetch_low_half_q <= 16'b0;
       if_id_q      <= '0;
       id_ex_q      <= '0;
       ex_mem_q     <= '0;
@@ -430,6 +478,7 @@ module rv64_core #(
       trap_cause_q <= 64'b0;
       trap_tval_q  <= 64'b0;
     end else if (halted_q) begin
+      fetch_cross_q <= 1'b0;
       if_id_q.valid  <= 1'b0;
       id_ex_q.valid  <= 1'b0;
       ex_mem_q.valid <= 1'b0;
@@ -463,6 +512,7 @@ module rv64_core #(
         ex_mem_q.valid <= 1'b0;
       end else if (ex_exception) begin
         halted_q      <= 1'b1;
+        fetch_cross_q <= 1'b0;
         trap_valid_q  <= 1'b1;
         trap_cause_q  <= ex_exception_cause;
         trap_tval_q   <= ex_exception_tval;
@@ -471,6 +521,7 @@ module rv64_core #(
         ex_mem_q.valid <= 1'b0;
       end else if (ex_redirect) begin
         pc_q           <= ex_redirect_target;
+        fetch_cross_q  <= 1'b0;
         if_id_q.valid  <= 1'b0;
         id_ex_q.valid  <= 1'b0;
       end else if (load_use_stall) begin
@@ -478,7 +529,8 @@ module rv64_core #(
       end else begin
         id_ex_q.valid     <= if_id_q.valid;
         id_ex_q.pc        <= if_id_q.pc;
-        id_ex_q.instr     <= if_id_q.instr;
+        id_ex_q.original_instr <= if_id_q.original_instr;
+        id_ex_q.instr_len <= if_id_q.instr_len;
         id_ex_q.imm       <= id_imm;
         id_ex_q.rs1_value <= id_rs1_value;
         id_ex_q.rs2_value <= id_rs2_value;
@@ -488,10 +540,19 @@ module rv64_core #(
         id_ex_q.ctrl      <= id_ctrl;
 
         if (i_valid_o && i_ready_i) begin
-          if_id_q.valid <= 1'b1;
-          if_id_q.pc    <= pc_q;
-          if_id_q.instr <= i_rdata_i;
-          pc_q          <= pc_q + 64'd4;
+          if (fetch_complete) begin
+            if_id_q.valid          <= 1'b1;
+            if_id_q.pc             <= pc_q;
+            if_id_q.instr          <= fetch_instr;
+            if_id_q.original_instr <= fetch_original_instr;
+            if_id_q.instr_len      <= fetch_instr_len;
+            pc_q                   <= pc_q + {61'b0, fetch_instr_len};
+            fetch_cross_q          <= 1'b0;
+          end else begin
+            if_id_q.valid    <= 1'b0;
+            fetch_cross_q    <= 1'b1;
+            fetch_low_half_q <= fetch_halfword;
+          end
         end else begin
           if_id_q.valid <= 1'b0;
         end

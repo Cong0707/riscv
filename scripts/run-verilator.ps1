@@ -33,7 +33,9 @@ $fileList = 'rtl/files.f'
 $tests = @(
   @{ Top = 'tb_rv64_core';  File = 'sim/tb_rv64_core.sv' },
   @{ Top = 'tb_rv64m_core'; File = 'sim/tb_rv64m_core.sv' },
-  @{ Top = 'tb_rv64a_core'; File = 'sim/tb_rv64a_core.sv' }
+  @{ Top = 'tb_rv64a_core'; File = 'sim/tb_rv64a_core.sv' },
+  @{ Top = 'tb_rv64c_core'; File = 'sim/tb_rv64c_core.sv' },
+  @{ Top = 'tb_rv64c_illegal'; File = 'sim/tb_rv64c_illegal.sv' }
 )
 
 Push-Location $repoRoot
@@ -47,7 +49,7 @@ try {
       & $verilator.Source '--lint-only' '--Wall' '--Wno-fatal' '--timing' '--top-module' $test.Top '-f' $fileList $test.File
       if ($LASTEXITCODE -ne 0) { throw "verilator lint failed for $($test.Top) with exit code $LASTEXITCODE" }
     }
-    Write-Host 'Verilator RV64I/RV64M/RV64A lint completed successfully.'
+    Write-Host 'Verilator RV64I/RV64M/RV64A/RV64C lint completed successfully.'
     return
   }
 
@@ -93,4 +95,4 @@ try {
   Pop-Location
 }
 
-Write-Host 'Verilator RV64I/RV64M/RV64A smoke tests completed successfully.'
+Write-Host 'Verilator RV64I/RV64M/RV64A/RV64C smoke tests completed successfully.'
