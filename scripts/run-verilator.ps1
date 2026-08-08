@@ -39,6 +39,10 @@ $tests = @(
   @{ Top = 'tb_rv64c_core'; File = 'sim/tb_rv64c_core.sv' },
   @{ Top = 'tb_rv64c_illegal'; File = 'sim/tb_rv64c_illegal.sv' },
   @{ Top = 'tb_precise_trap'; File = 'sim/tb_precise_trap.sv' },
+  @{ Top = 'tb_rv64_fpu';    File = 'sim/tb_rv64_fpu.sv' },
+  @{ Top = 'tb_rv64fd_core'; File = 'sim/tb_rv64fd_core.sv' },
+  @{ Top = 'tb_rv64fd_trap'; File = 'sim/tb_rv64fd_trap.sv' },
+  @{ Top = 'tb_rv64cd_decompressor'; File = 'sim/tb_rv64cd_decompressor.sv' },
   @{ Top = 'tb_hardfloat_vendor'; File = 'sim/tb_hardfloat_vendor.sv'; FileList = $hardfloatFileList }
 )
 

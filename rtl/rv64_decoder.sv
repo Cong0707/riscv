@@ -4,13 +4,19 @@ module rv64_decoder (
   input  logic [31:0]              instr,
   output logic [4:0]               rs1,
   output logic [4:0]               rs2,
+  output logic [4:0]               rs3,
   output logic [4:0]               rd,
   output rv64_pkg::decode_ctrl_t   ctrl
 );
 
+  function automatic logic valid_rounding_mode(input logic [2:0] rm);
+    valid_rounding_mode = (rm <= 3'b100) || (rm == 3'b111);
+  endfunction
+
   always_comb begin
     rs1 = instr[19:15];
     rs2 = instr[24:20];
+    rs3 = instr[31:27];
     rd  = instr[11:7];
 
     ctrl             = '0;
@@ -224,6 +230,215 @@ module rv64_decoder (
         endcase
       end
 
+      rv64_pkg::OPCODE_LOAD_FP: begin
+        ctrl.uses_rs1    = 1'b1;
+        ctrl.mem_read    = 1'b1;
+        ctrl.fp_mem_read = 1'b1;
+        ctrl.fp_reg_write = 1'b1;
+        ctrl.alu_src_imm = 1'b1;
+        ctrl.alu_op      = rv64_pkg::ALU_ADD;
+        ctrl.imm_type    = rv64_pkg::IMM_I;
+        case (instr[14:12])
+          3'b010: begin
+            ctrl.legal = 1'b1;
+            ctrl.mem_size = rv64_pkg::MEM_W;
+            ctrl.fp_fmt = rv64_pkg::FP_FMT_S;
+          end
+          3'b011: begin
+            ctrl.legal = 1'b1;
+            ctrl.mem_size = rv64_pkg::MEM_D;
+            ctrl.fp_fmt = rv64_pkg::FP_FMT_D;
+          end
+          default: begin end
+        endcase
+      end
+
+      rv64_pkg::OPCODE_STORE_FP: begin
+        ctrl.uses_rs1     = 1'b1;
+        ctrl.uses_frs2    = 1'b1;
+        ctrl.mem_write    = 1'b1;
+        ctrl.fp_mem_write = 1'b1;
+        ctrl.alu_src_imm  = 1'b1;
+        ctrl.alu_op       = rv64_pkg::ALU_ADD;
+        ctrl.imm_type     = rv64_pkg::IMM_S;
+        case (instr[14:12])
+          3'b010: begin
+            ctrl.legal = 1'b1;
+            ctrl.mem_size = rv64_pkg::MEM_W;
+            ctrl.fp_fmt = rv64_pkg::FP_FMT_S;
+          end
+          3'b011: begin
+            ctrl.legal = 1'b1;
+            ctrl.mem_size = rv64_pkg::MEM_D;
+            ctrl.fp_fmt = rv64_pkg::FP_FMT_D;
+          end
+          default: begin end
+        endcase
+      end
+
+      rv64_pkg::OPCODE_MADD,
+      rv64_pkg::OPCODE_MSUB,
+      rv64_pkg::OPCODE_NMSUB,
+      rv64_pkg::OPCODE_NMADD: begin
+        if ((instr[26:25] <= rv64_pkg::FP_FMT_D) &&
+            valid_rounding_mode(instr[14:12])) begin
+          ctrl.legal        = 1'b1;
+          ctrl.is_fp        = 1'b1;
+          ctrl.uses_frs1    = 1'b1;
+          ctrl.uses_frs2    = 1'b1;
+          ctrl.uses_frs3    = 1'b1;
+          ctrl.fp_reg_write = 1'b1;
+          ctrl.fp_op        = rv64_pkg::FP_FMA;
+          ctrl.fp_fmt       = instr[26:25];
+          ctrl.fp_rm        = instr[14:12];
+          case (instr[6:0])
+            rv64_pkg::OPCODE_MADD:  ctrl.fp_fma_op = 2'b00;
+            rv64_pkg::OPCODE_MSUB:  ctrl.fp_fma_op = 2'b01;
+            rv64_pkg::OPCODE_NMSUB: ctrl.fp_fma_op = 2'b10;
+            default:                 ctrl.fp_fma_op = 2'b11;
+          endcase
+        end
+      end
+
+      rv64_pkg::OPCODE_OP_FP: begin
+        case (instr[31:25])
+          7'b0000000, 7'b0000001: begin // FADD.S/D
+            if (valid_rounding_mode(instr[14:12])) begin
+              ctrl.legal = 1'b1; ctrl.is_fp = 1'b1;
+              ctrl.uses_frs1 = 1'b1; ctrl.uses_frs2 = 1'b1;
+              ctrl.fp_reg_write = 1'b1; ctrl.fp_op = rv64_pkg::FP_ADD;
+              ctrl.fp_fmt = {1'b0, instr[25]}; ctrl.fp_rm = instr[14:12];
+            end
+          end
+          7'b0000100, 7'b0000101: begin // FSUB.S/D
+            if (valid_rounding_mode(instr[14:12])) begin
+              ctrl.legal = 1'b1; ctrl.is_fp = 1'b1;
+              ctrl.uses_frs1 = 1'b1; ctrl.uses_frs2 = 1'b1;
+              ctrl.fp_reg_write = 1'b1; ctrl.fp_op = rv64_pkg::FP_SUB;
+              ctrl.fp_fmt = {1'b0, instr[25]}; ctrl.fp_rm = instr[14:12];
+            end
+          end
+          7'b0001000, 7'b0001001: begin // FMUL.S/D
+            if (valid_rounding_mode(instr[14:12])) begin
+              ctrl.legal = 1'b1; ctrl.is_fp = 1'b1;
+              ctrl.uses_frs1 = 1'b1; ctrl.uses_frs2 = 1'b1;
+              ctrl.fp_reg_write = 1'b1; ctrl.fp_op = rv64_pkg::FP_MUL;
+              ctrl.fp_fmt = {1'b0, instr[25]}; ctrl.fp_rm = instr[14:12];
+            end
+          end
+          7'b0001100, 7'b0001101: begin // FDIV.S/D
+            if (valid_rounding_mode(instr[14:12])) begin
+              ctrl.legal = 1'b1; ctrl.is_fp = 1'b1;
+              ctrl.uses_frs1 = 1'b1; ctrl.uses_frs2 = 1'b1;
+              ctrl.fp_reg_write = 1'b1; ctrl.fp_op = rv64_pkg::FP_DIV;
+              ctrl.fp_fmt = {1'b0, instr[25]}; ctrl.fp_rm = instr[14:12];
+            end
+          end
+          7'b0101100, 7'b0101101: begin // FSQRT.S/D
+            if ((instr[24:20] == 5'd0) && valid_rounding_mode(instr[14:12])) begin
+              ctrl.legal = 1'b1; ctrl.is_fp = 1'b1;
+              ctrl.uses_frs1 = 1'b1; ctrl.fp_reg_write = 1'b1;
+              ctrl.fp_op = rv64_pkg::FP_SQRT; ctrl.fp_fmt = {1'b0, instr[25]};
+              ctrl.fp_rm = instr[14:12];
+            end
+          end
+          7'b0010000, 7'b0010001: begin // FSGNJ.S/D family
+            case (instr[14:12])
+              3'b000: begin ctrl.legal = 1'b1; ctrl.fp_op = rv64_pkg::FP_SGNJ; end
+              3'b001: begin ctrl.legal = 1'b1; ctrl.fp_op = rv64_pkg::FP_SGNJN; end
+              3'b010: begin ctrl.legal = 1'b1; ctrl.fp_op = rv64_pkg::FP_SGNJX; end
+              default: begin end
+            endcase
+            if (ctrl.legal) begin
+              ctrl.is_fp = 1'b1; ctrl.uses_frs1 = 1'b1; ctrl.uses_frs2 = 1'b1;
+              ctrl.fp_reg_write = 1'b1; ctrl.fp_fmt = {1'b0, instr[25]};
+            end
+          end
+          7'b0010100, 7'b0010101: begin // FMIN/FMAX.S/D
+            case (instr[14:12])
+              3'b000: begin ctrl.legal = 1'b1; ctrl.fp_op = rv64_pkg::FP_MIN; end
+              3'b001: begin ctrl.legal = 1'b1; ctrl.fp_op = rv64_pkg::FP_MAX; end
+              default: begin end
+            endcase
+            if (ctrl.legal) begin
+              ctrl.is_fp = 1'b1; ctrl.uses_frs1 = 1'b1; ctrl.uses_frs2 = 1'b1;
+              ctrl.fp_reg_write = 1'b1; ctrl.fp_fmt = {1'b0, instr[25]};
+            end
+          end
+          7'b0100000: begin // FCVT.S.D
+            if ((instr[24:20] == 5'd1) && valid_rounding_mode(instr[14:12])) begin
+              ctrl.legal = 1'b1; ctrl.is_fp = 1'b1; ctrl.uses_frs1 = 1'b1;
+              ctrl.fp_reg_write = 1'b1; ctrl.fp_op = rv64_pkg::FP_CVT_F2F;
+              ctrl.fp_fmt = rv64_pkg::FP_FMT_S;
+              ctrl.fp_src_fmt = rv64_pkg::FP_FMT_D;
+              ctrl.fp_rm = instr[14:12];
+            end
+          end
+          7'b0100001: begin // FCVT.D.S
+            if ((instr[24:20] == 5'd0) && valid_rounding_mode(instr[14:12])) begin
+              ctrl.legal = 1'b1; ctrl.is_fp = 1'b1; ctrl.uses_frs1 = 1'b1;
+              ctrl.fp_reg_write = 1'b1; ctrl.fp_op = rv64_pkg::FP_CVT_F2F;
+              ctrl.fp_fmt = rv64_pkg::FP_FMT_D;
+              ctrl.fp_src_fmt = rv64_pkg::FP_FMT_S;
+              ctrl.fp_rm = instr[14:12];
+            end
+          end
+          7'b1010000, 7'b1010001: begin // FEQ/FLT/FLE.S/D
+            case (instr[14:12])
+              3'b010: begin ctrl.legal = 1'b1; ctrl.fp_op = rv64_pkg::FP_CMP_EQ; end
+              3'b001: begin ctrl.legal = 1'b1; ctrl.fp_op = rv64_pkg::FP_CMP_LT; end
+              3'b000: begin ctrl.legal = 1'b1; ctrl.fp_op = rv64_pkg::FP_CMP_LE; end
+              default: begin end
+            endcase
+            if (ctrl.legal) begin
+              ctrl.is_fp = 1'b1; ctrl.uses_frs1 = 1'b1; ctrl.uses_frs2 = 1'b1;
+              ctrl.uses_rd = 1'b1; ctrl.reg_write = 1'b1;
+              ctrl.fp_fmt = {1'b0, instr[25]};
+            end
+          end
+          7'b1100000, 7'b1100001: begin // FCVT.W[U]/L[U].S/D
+            if (valid_rounding_mode(instr[14:12]) && (instr[24:20] <= 5'd3)) begin
+              ctrl.legal = 1'b1; ctrl.is_fp = 1'b1; ctrl.uses_frs1 = 1'b1;
+              ctrl.uses_rd = 1'b1; ctrl.reg_write = 1'b1;
+              ctrl.fp_op = rv64_pkg::FP_CVT_F2I;
+              ctrl.fp_fmt = {1'b0, instr[25]};
+              ctrl.fp_int_fmt = instr[21:20]; ctrl.fp_rm = instr[14:12];
+            end
+          end
+          7'b1101000, 7'b1101001: begin // FCVT.S/D.W[U]/L[U]
+            if (valid_rounding_mode(instr[14:12]) && (instr[24:20] <= 5'd3)) begin
+              ctrl.legal = 1'b1; ctrl.is_fp = 1'b1; ctrl.uses_rs1 = 1'b1;
+              ctrl.fp_reg_write = 1'b1; ctrl.fp_op = rv64_pkg::FP_CVT_I2F;
+              ctrl.fp_fmt = {1'b0, instr[25]};
+              ctrl.fp_int_fmt = instr[21:20];
+              ctrl.fp_rm = instr[14:12];
+            end
+          end
+          7'b1110000, 7'b1110001: begin // FMV.X.* and FCLASS.*
+            if (instr[24:20] == 5'd0) begin
+              case (instr[14:12])
+                3'b000: begin ctrl.legal = 1'b1; ctrl.fp_op = rv64_pkg::FP_MOVE_F2X; end
+                3'b001: begin ctrl.legal = 1'b1; ctrl.fp_op = rv64_pkg::FP_CLASS; end
+                default: begin end
+              endcase
+              if (ctrl.legal) begin
+                ctrl.is_fp = 1'b1; ctrl.uses_frs1 = 1'b1;
+                ctrl.uses_rd = 1'b1; ctrl.reg_write = 1'b1;
+                ctrl.fp_fmt = {1'b0, instr[25]};
+              end
+            end
+          end
+          7'b1111000, 7'b1111001: begin // FMV.*.X
+            if ((instr[24:20] == 5'd0) && (instr[14:12] == 3'b000)) begin
+              ctrl.legal = 1'b1; ctrl.is_fp = 1'b1; ctrl.uses_rs1 = 1'b1;
+              ctrl.fp_reg_write = 1'b1; ctrl.fp_op = rv64_pkg::FP_MOVE_X2F;
+              ctrl.fp_fmt = {1'b0, instr[25]};
+            end
+          end
+          default: begin end
+        endcase
+      end
+
       rv64_pkg::OPCODE_AMO: begin
         ctrl.uses_rs1  = 1'b1;
         ctrl.uses_rd   = 1'b1;
@@ -265,6 +480,9 @@ module rv64_decoder (
         if (instr[14:12] == 3'b000) begin
           ctrl.legal     = 1'b1;
           ctrl.is_fence  = 1'b1;
+        end else if ((instr[14:12] == 3'b001) && (instr[31:20] == 12'b0)) begin
+          ctrl.legal     = 1'b1;
+          ctrl.is_fence  = 1'b1;
         end
       end
 
@@ -275,6 +493,25 @@ module rv64_decoder (
         end else if (instr == 32'h0010_0073) begin
           ctrl.legal    = 1'b1;
           ctrl.is_ebreak = 1'b1;
+        end else if ((instr[31:20] == 12'h001) || (instr[31:20] == 12'h002) ||
+                     (instr[31:20] == 12'h003)) begin
+          case (instr[14:12])
+            3'b001: begin ctrl.legal = 1'b1; ctrl.csr_op = rv64_pkg::CSR_RW; end
+            3'b010: begin ctrl.legal = 1'b1; ctrl.csr_op = rv64_pkg::CSR_RS; end
+            3'b011: begin ctrl.legal = 1'b1; ctrl.csr_op = rv64_pkg::CSR_RC; end
+            3'b101: begin ctrl.legal = 1'b1; ctrl.csr_op = rv64_pkg::CSR_RW; ctrl.csr_use_imm = 1'b1; end
+            3'b110: begin ctrl.legal = 1'b1; ctrl.csr_op = rv64_pkg::CSR_RS; ctrl.csr_use_imm = 1'b1; end
+            3'b111: begin ctrl.legal = 1'b1; ctrl.csr_op = rv64_pkg::CSR_RC; ctrl.csr_use_imm = 1'b1; end
+            default: begin end
+          endcase
+          if (ctrl.legal) begin
+            ctrl.is_csr = 1'b1;
+            ctrl.uses_rd = 1'b1;
+            ctrl.reg_write = 1'b1;
+            ctrl.csr_addr = instr[31:20];
+            if (!ctrl.csr_use_imm)
+              ctrl.uses_rs1 = 1'b1;
+          end
         end
       end
 
@@ -303,6 +540,15 @@ module rv64_decoder (
       ctrl.is_fence    = 1'b0;
       ctrl.is_mdu      = 1'b0;
       ctrl.is_amo      = 1'b0;
+      ctrl.is_csr      = 1'b0;
+      ctrl.csr_use_imm = 1'b0;
+      ctrl.uses_frs1   = 1'b0;
+      ctrl.uses_frs2   = 1'b0;
+      ctrl.uses_frs3   = 1'b0;
+      ctrl.fp_reg_write = 1'b0;
+      ctrl.fp_mem_read = 1'b0;
+      ctrl.fp_mem_write = 1'b0;
+      ctrl.is_fp       = 1'b0;
       ctrl.is_ecall    = 1'b0;
       ctrl.is_ebreak   = 1'b0;
       ctrl.alu_op      = rv64_pkg::ALU_NONE;
@@ -311,6 +557,9 @@ module rv64_decoder (
       ctrl.mem_size    = rv64_pkg::MEM_NONE;
       ctrl.mdu_op      = rv64_pkg::MDU_MUL;
       ctrl.amo_op      = rv64_pkg::AMO_LR;
+      ctrl.csr_op      = rv64_pkg::CSR_NONE;
+      ctrl.csr_addr    = 12'b0;
+      ctrl.fp_op       = rv64_pkg::FP_NONE;
     end
   end
 

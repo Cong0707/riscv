@@ -7,9 +7,11 @@ module rv64c_decompressor (
 );
 
   localparam logic [6:0] OPCODE_LOAD      = 7'b0000011;
+  localparam logic [6:0] OPCODE_LOAD_FP   = 7'b0000111;
   localparam logic [6:0] OPCODE_OP_IMM    = 7'b0010011;
   localparam logic [6:0] OPCODE_OP_IMM_32 = 7'b0011011;
   localparam logic [6:0] OPCODE_STORE     = 7'b0100011;
+  localparam logic [6:0] OPCODE_STORE_FP  = 7'b0100111;
   localparam logic [6:0] OPCODE_OP        = 7'b0110011;
   localparam logic [6:0] OPCODE_LUI       = 7'b0110111;
   localparam logic [6:0] OPCODE_OP_32     = 7'b0111011;
@@ -153,6 +155,9 @@ module rv64c_decompressor (
           end
 
           3'b001: begin // C.FLD requires D
+            instr_o = encode_i(ld_imm, rs1_p, 3'b011, rd_p,
+                               OPCODE_LOAD_FP);
+            legal_o = 1'b1;
           end
 
           3'b010: begin // C.LW
@@ -169,6 +174,9 @@ module rv64c_decompressor (
           end
 
           3'b101: begin // C.FSD requires D
+            instr_o = encode_s(ld_imm, rs2_p, rs1_p, 3'b011,
+                               OPCODE_STORE_FP);
+            legal_o = 1'b1;
           end
 
           3'b110: begin // C.SW
@@ -321,6 +329,9 @@ module rv64c_decompressor (
           end
 
           3'b001: begin // C.FLDSP requires D
+            instr_o = encode_i(ldsp_imm, 5'd2, 3'b011, rd_c,
+                               OPCODE_LOAD_FP);
+            legal_o = 1'b1;
           end
 
           3'b010: begin // C.LWSP; rd=x0 is reserved
@@ -374,6 +385,9 @@ module rv64c_decompressor (
           end
 
           3'b101: begin // C.FSDSP requires D
+            instr_o = encode_s(sdsp_imm, rs2_c, 5'd2, 3'b011,
+                               OPCODE_STORE_FP);
+            legal_o = 1'b1;
           end
 
           3'b110: begin // C.SWSP

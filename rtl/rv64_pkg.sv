@@ -9,11 +9,13 @@ package rv64_pkg;
   // constants retain the same width and encoding while remaining portable.
   typedef logic [6:0] opcode_t;
   localparam opcode_t OPCODE_LOAD      = 7'b0000011;
+  localparam opcode_t OPCODE_LOAD_FP   = 7'b0000111;
   localparam opcode_t OPCODE_MISC_MEM  = 7'b0001111;
   localparam opcode_t OPCODE_OP_IMM    = 7'b0010011;
   localparam opcode_t OPCODE_AUIPC     = 7'b0010111;
   localparam opcode_t OPCODE_OP_IMM_32 = 7'b0011011;
   localparam opcode_t OPCODE_STORE     = 7'b0100011;
+  localparam opcode_t OPCODE_STORE_FP  = 7'b0100111;
   localparam opcode_t OPCODE_AMO       = 7'b0101111;
   localparam opcode_t OPCODE_OP        = 7'b0110011;
   localparam opcode_t OPCODE_LUI       = 7'b0110111;
@@ -22,6 +24,11 @@ package rv64_pkg;
   localparam opcode_t OPCODE_JALR      = 7'b1100111;
   localparam opcode_t OPCODE_JAL       = 7'b1101111;
   localparam opcode_t OPCODE_SYSTEM    = 7'b1110011;
+  localparam opcode_t OPCODE_MADD      = 7'b1000011;
+  localparam opcode_t OPCODE_MSUB      = 7'b1000111;
+  localparam opcode_t OPCODE_NMSUB     = 7'b1001011;
+  localparam opcode_t OPCODE_NMADD     = 7'b1001111;
+  localparam opcode_t OPCODE_OP_FP     = 7'b1010011;
 
   typedef logic [4:0] alu_op_t;
   localparam alu_op_t ALU_ADD    = 5'd0;
@@ -96,6 +103,47 @@ package rv64_pkg;
   localparam amo_op_t AMO_MINU = 4'd9;
   localparam amo_op_t AMO_MAXU = 4'd10;
 
+  typedef logic [1:0] csr_op_t;
+  localparam csr_op_t CSR_NONE = 2'd0;
+  localparam csr_op_t CSR_RW   = 2'd1;
+  localparam csr_op_t CSR_RS   = 2'd2;
+  localparam csr_op_t CSR_RC   = 2'd3;
+
+  typedef logic [1:0] fp_fmt_t;
+  localparam fp_fmt_t FP_FMT_S = 2'd0;
+  localparam fp_fmt_t FP_FMT_D = 2'd1;
+
+  // Integer format selectors used by FCVT.  Bit 1 selects the architectural
+  // width (W/L), while bit 0 selects unsigned conversion.
+  typedef logic [1:0] fp_int_fmt_t;
+  localparam fp_int_fmt_t FP_INT_W  = 2'b00;
+  localparam fp_int_fmt_t FP_INT_WU = 2'b01;
+  localparam fp_int_fmt_t FP_INT_L  = 2'b10;
+  localparam fp_int_fmt_t FP_INT_LU = 2'b11;
+
+  typedef logic [5:0] fp_op_t;
+  localparam fp_op_t FP_NONE     = 6'd0;
+  localparam fp_op_t FP_ADD      = 6'd1;
+  localparam fp_op_t FP_SUB      = 6'd2;
+  localparam fp_op_t FP_MUL      = 6'd3;
+  localparam fp_op_t FP_DIV      = 6'd4;
+  localparam fp_op_t FP_SQRT     = 6'd5;
+  localparam fp_op_t FP_FMA      = 6'd6;
+  localparam fp_op_t FP_SGNJ     = 6'd7;
+  localparam fp_op_t FP_SGNJN    = 6'd8;
+  localparam fp_op_t FP_SGNJX    = 6'd9;
+  localparam fp_op_t FP_MIN      = 6'd10;
+  localparam fp_op_t FP_MAX      = 6'd11;
+  localparam fp_op_t FP_CMP_EQ   = 6'd12;
+  localparam fp_op_t FP_CMP_LT   = 6'd13;
+  localparam fp_op_t FP_CMP_LE   = 6'd14;
+  localparam fp_op_t FP_CLASS    = 6'd15;
+  localparam fp_op_t FP_CVT_F2I  = 6'd16;
+  localparam fp_op_t FP_CVT_I2F  = 6'd17;
+  localparam fp_op_t FP_CVT_F2F  = 6'd18;
+  localparam fp_op_t FP_MOVE_F2X = 6'd19;
+  localparam fp_op_t FP_MOVE_X2F = 6'd20;
+
   // Control information emitted by the instruction decoder.
   // alu_src_pc selects the current PC as the ALU A input (AUIPC and PC based
   // target calculations). alu_src_imm selects the decoded immediate as B.
@@ -117,6 +165,15 @@ package rv64_pkg;
     logic       is_fence;
     logic       is_mdu;
     logic       is_amo;
+    logic       is_csr;
+    logic       csr_use_imm;
+    logic       uses_frs1;
+    logic       uses_frs2;
+    logic       uses_frs3;
+    logic       fp_reg_write;
+    logic       fp_mem_read;
+    logic       fp_mem_write;
+    logic       is_fp;
     logic       is_ecall;
     logic       is_ebreak;
     alu_op_t    alu_op;
@@ -125,6 +182,14 @@ package rv64_pkg;
     mem_size_t  mem_size;
     mdu_op_t    mdu_op;
     amo_op_t    amo_op;
+    csr_op_t    csr_op;
+    logic [11:0] csr_addr;
+    fp_op_t     fp_op;
+    fp_fmt_t    fp_fmt;
+    fp_fmt_t    fp_src_fmt;
+    fp_int_fmt_t fp_int_fmt;
+    logic [1:0] fp_fma_op;
+    logic [2:0] fp_rm;
   } decode_ctrl_t;
 
 endpackage
